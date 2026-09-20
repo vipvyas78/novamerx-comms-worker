@@ -1,0 +1,11 @@
+# Local `wrangler dev` secrets. Copy to .dev.vars (gitignored).
+#
+# Both must match the TPS deployment you are pointing at, or every POST 401s with
+# BAD_SIGNATURE. TPS itself refuses to boot with one set and not the other.
+INBOUND_EMAIL_TOKEN=
+INBOUND_EMAIL_SIGNING_SECRET=
+
+# Point at a TPS you are running. THROUGH NGINX, not straight at :3200 — the 1MB
+# client_max_body_size default is exactly the failure this Worker would otherwise mask by
+# dutifully re-posting every message truncated.
+TPS_INBOUND_URL=http://localhost:8080/tps-api/internal/email/inbound

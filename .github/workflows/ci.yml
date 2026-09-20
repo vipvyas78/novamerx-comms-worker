@@ -1,0 +1,95 @@
+# CI - typecheck, unit tests, a Worker bundle check and a migration idempotency check.
+#
+# No Cloudflare account and no secrets. Every test here runs on plain node: `sign.ts` is
+# WebCrypto-only and Node 24 exposes `crypto.subtle` globally, so the signing code that
+# actually ships is exercised unmodified. That is what lets the signature vectors - the
+# contract this repository exists to honour - be a real gate rather than a manual step.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, tests and Worker bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No `version:` - action-setup reads packageManager from package.json, so the pinned
+      # version cannot drift away from the lockfile.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Two tsconfigs, and the split is the point: the Worker carries no node types, so an
+      # accidental `node:crypto` import is a compile error rather than a runtime failure at
+      # the edge.
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      # The strongest guard in this workflow. tsc alone cannot see a transitive `node:`
+      # import pulled in through a dependency; bundling for workerd can, and that failure
+      # would otherwise be discovered in production.
+      - name: Worker bundles for the edge
+        run: pnpm deploy:dry
+
+  migration:
+    name: Migration applies, and applies once
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Pinned: the schema uses gen_random_uuid() and UNIQUE NULLS NOT DISTINCT.
+        image: postgres:16
+        env:
+          POSTGRES_USER: comms
+          POSTGRES_PASSWORD: comms
+          POSTGRES_DB: comms_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Run it TWICE. The second run proving a no-op is what makes adopting an existing
+      # database safe - this schema already exists in dev, created by TPS before this
+      # repository was extracted, and the migration has to walk into that without failing.
+      - name: Apply, then re-apply
+        env:
+          DATABASE_URL: postgresql://comms:comms@localhost:5432/comms_test
+        run: |
+          pnpm migrate
+          pnpm migrate
+          node -e "
+            const pg = require('pg');
+            (async () => {
+              const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
+              await c.connect();
+              const led = await c.query('SELECT count(*)::int AS n FROM comms.schema_migrations');
+              const tbl = await c.query(\"SELECT count(*)::int AS n FROM pg_tables WHERE schemaname='comms'\");
+              if (led.rows[0].n !== 1) throw new Error('ledger should hold exactly one row, got ' + led.rows[0].n);
+              if (tbl.rows[0].n !== 8) throw new Error('expected 7 tables + ledger, got ' + tbl.rows[0].n);
+              console.log('ledger rows:', led.rows[0].n, ' tables:', tbl.rows[0].n);
+              await c.end();
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+          "

@@ -1,0 +1,30 @@
+# Explicit project name, for the same reason TPS pins its own: without it Compose derives
+# the name from this file's parent directory ("docker") - which is what the other stacks in
+# this suite derive too, and a `docker compose down -v` here would then take the parent
+# platform's database volume with it.
+name: comms
+
+# PostgreSQL is owned solely by the parent platform (nrm-seed-generator). This stack shares
+# that instance and creates exactly one schema in it. Start the parent first.
+services:
+  migrate-comms:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.migrate
+    environment:
+      DATABASE_URL: postgresql://buildflow:buildflow@postgres:5432/buildflow
+      COMMS_SCHEMA: ${COMMS_SCHEMA:-comms}
+      # Unset on a single-role deployment, where the GRANT block in 001 is skipped.
+      COMMS_DML_ROLE: ${COMMS_DML_ROLE:-}
+    # The parent owns postgres, so a `depends_on` condition cannot reach it across compose
+    # projects; retry instead until it accepts connections. TPS does the same, for the same
+    # reason, and it is also why TPS asserts the schema at boot rather than assuming this
+    # job has already run.
+    restart: on-failure
+    networks:
+      - parent
+
+networks:
+  parent:
+    external: true
+    name: ${PARENT_NETWORK:-buildflow}

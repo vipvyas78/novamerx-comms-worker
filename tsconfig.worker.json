@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // The Worker runs on workerd, which has no Node built-ins unless a compatibility flag
+    // asks for them. Omitting "node" from `types` is what makes an accidental
+    // `import { createHmac } from 'node:crypto'` a compile error here rather than a
+    // runtime failure at the edge. `wrangler deploy --dry-run` in CI is the second guard.
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src/worker/**/*.ts"]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "novamerx-comms-worker",
+  "main": "src/worker/index.ts",
+  // Pinned, not "latest". A compatibility date is what fixes runtime behaviour; letting it
+  // drift means a deploy months from now runs on semantics nothing here was tested against.
+  "compatibility_date": "2025-02-04",
+
+  // Deliberately NO nodejs_compat. Everything here runs on web-standard APIs - crypto.subtle
+  // rather than node:crypto - so an accidental `node:` import is a build failure under
+  // `wrangler deploy --dry-run` instead of a runtime error at the edge. The flag would turn
+  // that guard off.
+
+  "vars": {
+    // TPS's inbound endpoint. Overridden per environment; this default points nowhere real
+    // so a misconfigured deploy fails loudly rather than posting somewhere unexpected.
+    "TPS_INBOUND_URL": "https://example.invalid/tps-api/internal/email/inbound"
+  },
+
+  // Secrets, NOT vars: `wrangler secret put INBOUND_EMAIL_TOKEN` and
+  // `wrangler secret put INBOUND_EMAIL_SIGNING_SECRET`. Both must match the TPS deployment
+  // exactly or every message 401s. See README "Rotating the secrets".
+
+  // The dead-letter spool. Optional at runtime - without it a message TPS cannot accept
+  // after three attempts is logged and lost, and the README says so - but configured here
+  // because that is the whole durability story.
+  "r2_buckets": [
+    { "binding": "SPOOL", "bucket_name": "novamerx-comms-spool" }
+  ],
+
+  // The replay loop. This IS the retry mechanism: Cloudflare Queues caps a message at
+  // 128 KB against a payload of up to 20 MB, so a queue could only ever carry a pointer to
+  // an R2 object we had already written - a paid dependency providing a timer. A cron is
+  // that timer, free.
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+
+  "observability": { "enabled": true }
+}

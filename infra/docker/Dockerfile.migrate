@@ -1,0 +1,22 @@
+# The migration runner only. The Worker is deployed with wrangler and is never containerised
+# - it runs at Cloudflare's edge.
+FROM node:24-alpine AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY tsconfig.base.json tsconfig.migrate.json ./
+COPY src/migrate ./src/migrate
+RUN pnpm exec tsc -p tsconfig.migrate.json --noEmit false --outDir dist
+
+FROM node:24-alpine
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+# `pg` and `zod` only; the Worker's dependencies have no business in this image.
+RUN pnpm install --frozen-lockfile --prod
+COPY --from=build /app/dist ./dist
+# database/migrations is resolved RELATIVE TO the compiled file (../../database/migrations),
+# so the layout below has to mirror the source tree.
+COPY database ./database
+CMD ["node", "dist/migrate/migrate.js"]

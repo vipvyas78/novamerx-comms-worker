@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Plain Node. The migration runner connects to Postgres and never runs at the edge,
+    // so it gets the opposite type environment from the Worker — which is the whole
+    // reason this repo carries two tsconfigs rather than one.
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["src/migrate/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+}
