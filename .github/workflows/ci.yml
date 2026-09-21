@@ -87,8 +87,11 @@ jobs:
               await c.connect();
               const led = await c.query('SELECT count(*)::int AS n FROM comms.schema_migrations');
               const tbl = await c.query(\"SELECT count(*)::int AS n FROM pg_tables WHERE schemaname='comms'\");
-              if (led.rows[0].n !== 1) throw new Error('ledger should hold exactly one row, got ' + led.rows[0].n);
+              if (led.rows[0].n !== 2) throw new Error('ledger should hold exactly two rows (001, 002), got ' + led.rows[0].n);
               if (tbl.rows[0].n !== 8) throw new Error('expected 7 tables + ledger, got ' + tbl.rows[0].n);
+              const widened = await c.query(\"SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conrelid IN ('comms.messages'::regclass,'comms.notifications'::regclass) AND contype='c' AND pg_get_constraintdef(oid) LIKE '%kind%'\");
+              const defs = widened.rows.map((r) => r.d).join(' ');
+              if (!defs.includes('itt_reminder') || !defs.includes('itt_response_detected')) throw new Error('002 did not widen the kind checks');
               console.log('ledger rows:', led.rows[0].n, ' tables:', tbl.rows[0].n);
               await c.end();
             })().catch((e) => { console.error(e.message); process.exit(1); });

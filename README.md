@@ -198,3 +198,12 @@ a `node:` import reaching the edge is `pnpm deploy:dry`, not a package boundary.
 
 **Revisit when a second Worker appears** (outbound mail, bounce handling). That is the
 trigger; it is written down here so nobody has to relitigate it.
+
+## Migration 002 — ITT reminder kinds
+
+Widens two CHECKs and nothing else: `comms.messages.kind` gains `itt_reminder` (a chase sent
+to a subcontractor, which is what puts it on the contractor timeline) and
+`comms.notifications.kind` gains `itt_response_detected` (a reply the classifier read as an
+accept/decline). Added for BuildFlow issue #36. TPS's `REQUIRED_COMMS_MIGRATION` moves to
+`002_itt_reminder_kinds.sql`, so **this migrates before TPS deploys** — `bff-tps` refuses to
+boot against a `comms` schema behind it.
