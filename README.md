@@ -207,3 +207,13 @@ to a subcontractor, which is what puts it on the contractor timeline) and
 accept/decline). Added for BuildFlow issue #36. TPS's `REQUIRED_COMMS_MIGRATION` moves to
 `002_itt_reminder_kinds.sql`, so **this migrates before TPS deploys** — `bff-tps` refuses to
 boot against a `comms` schema behind it.
+
+## Migration 003 — RFI response kind
+
+Widens the same two CHECKs again: `comms.messages.kind` gains `rfi_response` (the estimator's
+approved answer to a subcontractor's query, sent from the app) and
+`comms.notifications.kind` gains `rfi_review_required` (drafts are ready for the estimator to
+review — the acceptance criterion issue #41 states outright). **Not** `relay_to_subcontractor`
+— see the migration file's own comment for why that would silently break
+`listClientAnswersForWorkflow`'s "has this answer been relayed" check. TPS's
+`REQUIRED_COMMS_MIGRATION` moves to `003_rfi_kinds.sql`, same deploy-order consequence as 002.
