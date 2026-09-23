@@ -217,3 +217,25 @@ review — the acceptance criterion issue #41 states outright). **Not** `relay_t
 — see the migration file's own comment for why that would silently break
 `listClientAnswersForWorkflow`'s "has this answer been relayed" check. TPS's
 `REQUIRED_COMMS_MIGRATION` moves to `003_rfi_kinds.sql`, same deploy-order consequence as 002.
+
+## Migration 004 — tender addendum notification
+
+`comms.notifications.kind` gains `addendum_approval_required`: the client's revised documents
+changed the take-off, and an estimator has to approve the addendum and the revised tender
+return date before anything is issued. BuildFlow issue #68, part of #42. `comms.messages.kind`
+is **not** widened — the addendum is not a message, which is the point below.
+
+It also adds **`comms.notifications.dedupe_key`**, and that is the part worth reading. Every
+notification until now hangs off a `comms.messages` row, and that is where its idempotency
+comes from: `message_id` is UNIQUE and `insertNotification` says
+`ON CONFLICT (message_id) DO NOTHING`. An addendum approval has no message — nothing was sent
+to anyone; the app is asking its own estimator a question.
+
+Leaving `message_id` NULL does not merely lose the guarantee, it loses it **silently**: a
+UNIQUE index treats every NULL as distinct, so the `ON CONFLICT` never fires and a retried
+write inserts a second identical row. The bell would show "2 addenda to approve" for one
+addendum, and the count is the whole point of a bell. So a nullable `dedupe_key` with its own
+partial unique index; callers set one or the other, never neither.
+
+TPS's `REQUIRED_COMMS_MIGRATION` moves to `004_addendum_notification.sql`, same deploy-order
+consequence as 002 and 003.
