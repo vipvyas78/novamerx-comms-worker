@@ -5,7 +5,7 @@
 #   production  manual, from a tag, behind the environment's required reviewer
 #
 # Migrates the `comms` schema first, because TPS asserts it at boot and deploys after this.
-# The two inbound-email secrets must equal TPS's in the same environment; the parent repo's
+# The two inbound-email secrets must equal TPS's in the same environment; novamerx-infra's
 # scripts/sync-env-secrets.sh writes both sides at once.
 name: Deploy
 

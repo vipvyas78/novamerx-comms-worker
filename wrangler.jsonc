@@ -46,7 +46,7 @@
   //
   // Each TPS_INBOUND_URL is TPS behind BuildFlow's origin; that path bypasses Cloudflare
   // Access because this Worker cannot log in — the request is bearer + HMAC signed instead.
-  // The spool buckets are created by nrm-seed-generator/infra/terraform.
+  // The spool buckets are created by novamerx-infra/terraform (modules/storage).
   "env": {
     "dev": {
       "name": "novamerx-comms-worker-dev",

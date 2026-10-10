@@ -51,8 +51,8 @@ rather than by any compose file. Getting it wrong costs a restart loop and a log
 naming this repository, not a corrupt state.
 
 ```bash
-# 1. the parent platform (owns postgres, redis, minio)
-cd ../nrm-seed-generator && docker compose up -d
+# 1. the shared infrastructure (owns postgres, redis, minio and the buildflow network)
+cd ../novamerx-infra && make infra-up
 
 # 2. this repository's migration
 pnpm migrate            # or: docker compose -f infra/docker/docker-compose.yml up
@@ -167,9 +167,9 @@ Since nrm-seed-generator#145 this repository deploys itself, one script per envi
 | production | `novamerx-comms-worker` (unchanged) | **Deploy** workflow from a tag, behind a reviewer |
 
 The workflow migrates the `comms` schema, deploys, then sets the two inbound-email secrets
-from the GitHub Environment. The parent repo's `scripts/sync-env-secrets.sh` writes the same
-values to TPS, so the pair always matches. The spool buckets come from the parent repo's
-Terraform. What is still manual, per environment:
+from the GitHub Environment. [novamerx-infra](https://github.com/vipvyas78/novamerx-infra)'s
+`scripts/sync-env-secrets.sh` writes the same values to TPS, so the pair always matches. The
+spool buckets come from novamerx-infra's Terraform. What is still manual, per environment:
 
 1. **Email Routing rules**, one per `<org>-ittcomms@novamerx.ai` address plus one for
    `itt-reply@novamerx.co.uk`, each targeting this Worker. Nothing in this repository
