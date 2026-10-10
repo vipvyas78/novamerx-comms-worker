@@ -51,8 +51,8 @@ rather than by any compose file. Getting it wrong costs a restart loop and a log
 naming this repository, not a corrupt state.
 
 ```bash
-# 1. the parent platform (owns postgres, redis, minio)
-cd ../nrm-seed-generator && docker compose up -d
+# 1. the shared infrastructure (owns postgres, redis, minio and the buildflow network)
+cd ../novamerx-infra && make infra-up
 
 # 2. this repository's migration
 pnpm migrate            # or: docker compose -f infra/docker/docker-compose.yml up
@@ -155,16 +155,29 @@ pnpm dev                # wrangler dev
 pnpm conformance        # live check against a running TPS
 ```
 
-## Deployment, which is not done by this repository
+## Deployment
 
-1. `wrangler secret put INBOUND_EMAIL_TOKEN` and `INBOUND_EMAIL_SIGNING_SECRET` — both must
-   match the TPS deployment exactly.
-2. `wrangler r2 bucket create novamerx-comms-spool`.
-3. `wrangler deploy`.
-4. **Email Routing rules**, one per `<org>-ittcomms@novamerx.ai` address plus one for
+Since nrm-seed-generator#145 this repository deploys itself, one script per environment
+(`env` blocks in `wrangler.jsonc`):
+
+| environment | script | how |
+|---|---|---|
+| dev | `novamerx-comms-worker-dev` | **Deploy** workflow, any branch (or the parent's "Deploy all to dev") |
+| staging | `novamerx-comms-worker-staging` | every merge to `main`, **off until `STAGING_ENABLED=true`** |
+| production | `novamerx-comms-worker` (unchanged) | **Deploy** workflow from a tag, behind a reviewer |
+
+The workflow migrates the `comms` schema, deploys, then sets the two inbound-email secrets
+from the GitHub Environment. [novamerx-infra](https://github.com/vipvyas78/novamerx-infra)'s
+`scripts/sync-env-secrets.sh` writes the same values to TPS, so the pair always matches. The
+spool buckets come from novamerx-infra's Terraform. What is still manual, per environment:
+
+1. **Email Routing rules**, one per `<org>-ittcomms@novamerx.ai` address plus one for
    `itt-reply@novamerx.co.uk`, each targeting this Worker. Nothing in this repository
    creates them, and until they exist no mail reaches the Worker at all.
-5. Verify `Authentication-Results` on the first real delivery — see the caveat below.
+2. Verify `Authentication-Results` on the first real delivery — see the caveat below.
+
+Dev and staging route mail from a **separate, non-production zone**, so testing never
+consumes `novamerx.ai`'s Email Routing and Sending domain allowance.
 
 ### Rotating the secrets
 

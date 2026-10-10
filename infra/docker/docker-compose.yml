@@ -4,8 +4,9 @@
 # platform's database volume with it.
 name: comms
 
-# PostgreSQL is owned solely by the parent platform (nrm-seed-generator). This stack shares
-# that instance and creates exactly one schema in it. Start the parent first.
+# PostgreSQL and the `buildflow` network are owned by the shared infra stack
+# (vipvyas78/novamerx-infra, compose project `buildflow-infra`). This stack shares that
+# instance and creates exactly one schema in it. Start the infra first (`make infra-up` there).
 services:
   migrate-comms:
     build:
