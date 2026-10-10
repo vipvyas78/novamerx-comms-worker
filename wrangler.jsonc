@@ -36,5 +36,32 @@
     "crons": ["*/5 * * * *"]
   },
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+
+  // One script per cloud environment (nrm-seed-generator#145). `vars` and `r2_buckets` do
+  // not inherit in wrangler, so each environment states its own; the cron does. Production
+  // keeps the original script name, so the Email Routing rule already pointing at
+  // `novamerx-comms-worker` stays valid. The top-level block above is what `wrangler dev`
+  // runs locally.
+  //
+  // Each TPS_INBOUND_URL is TPS behind BuildFlow's origin; that path bypasses Cloudflare
+  // Access because this Worker cannot log in — the request is bearer + HMAC signed instead.
+  // The spool buckets are created by nrm-seed-generator/infra/terraform.
+  "env": {
+    "dev": {
+      "name": "novamerx-comms-worker-dev",
+      "vars": { "TPS_INBOUND_URL": "https://dev.novamerx.ai/tps-api/internal/email/inbound" },
+      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool-dev", "jurisdiction": "eu" }]
+    },
+    "staging": {
+      "name": "novamerx-comms-worker-staging",
+      "vars": { "TPS_INBOUND_URL": "https://staging.novamerx.ai/tps-api/internal/email/inbound" },
+      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool-staging", "jurisdiction": "eu" }]
+    },
+    "production": {
+      "name": "novamerx-comms-worker",
+      "vars": { "TPS_INBOUND_URL": "https://app.novamerx.ai/tps-api/internal/email/inbound" },
+      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool", "jurisdiction": "eu" }]
+    }
+  }
 }

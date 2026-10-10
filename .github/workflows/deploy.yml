@@ -1,0 +1,96 @@
+# Deploy the comms Worker to a cloud environment (nrm-seed-generator#145).
+#
+#   dev         manual, any branch (or nrm-seed-generator's "Deploy all to dev")
+#   staging     on push to main (deploy-staging.yml), once STAGING_ENABLED is on
+#   production  manual, from a tag, behind the environment's required reviewer
+#
+# Migrates the `comms` schema first, because TPS asserts it at boot and deploys after this.
+# The two inbound-email secrets must equal TPS's in the same environment; the parent repo's
+# scripts/sync-env-secrets.sh writes both sides at once.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, staging, production]
+        default: dev
+      ref:
+        description: Branch, tag or commit (dev accepts any branch; production a tag)
+        type: string
+        default: main
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      ref:
+        type: string
+        required: true
+
+concurrency:
+  group: deploy-comms-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Guard the environment
+        run: |
+          set -euo pipefail
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "::error::secret CLOUDFLARE_DEPLOY_TOKEN is not set in '$ENVIRONMENT'"; exit 1; }
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "::error::variable CLOUDFLARE_ACCOUNT_ID is not set in '$ENVIRONMENT'"; exit 1; }
+          SHA="$(git rev-parse HEAD)"
+          if [ "$ENVIRONMENT" = "production" ] && ! git describe --exact-match --tags "$SHA" >/dev/null 2>&1; then
+            echo "::error::production deploys a tagged commit only"; exit 1
+          fi
+          if [ "$ENVIRONMENT" != "dev" ]; then
+            git fetch -q origin main
+            git merge-base --is-ancestor "$SHA" origin/main || { echo "::error::$ENVIRONMENT deploys commits on main only"; exit 1; }
+          fi
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Migrate the comms schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COMMS_SCHEMA: comms
+        run: pnpm migrate
+
+      - name: Deploy, then set secrets
+        env:
+          INBOUND_EMAIL_TOKEN: ${{ secrets.INBOUND_EMAIL_TOKEN }}
+          INBOUND_EMAIL_SIGNING_SECRET: ${{ secrets.INBOUND_EMAIL_SIGNING_SECRET }}
+        run: |
+          set -euo pipefail
+          [ -n "$INBOUND_EMAIL_TOKEN" ] && [ -n "$INBOUND_EMAIL_SIGNING_SECRET" ] \
+            || { echo "::error::INBOUND_EMAIL_TOKEN and INBOUND_EMAIL_SIGNING_SECRET must both be set in '$ENVIRONMENT'"; exit 1; }
+          pnpm exec wrangler deploy --env "$ENVIRONMENT" --message "${GITHUB_SHA:0:7} by $GITHUB_ACTOR"
+          # wrangler 3 has no --secrets-file; bulk from a private temp file instead, never argv.
+          SECRETS_FILE="$RUNNER_TEMP/worker-secrets.json"
+          trap 'rm -f "$SECRETS_FILE"' EXIT
+          umask 077
+          python3 -c 'import json, os, sys; json.dump({k: os.environ[k] for k in ("INBOUND_EMAIL_TOKEN", "INBOUND_EMAIL_SIGNING_SECRET")}, open(sys.argv[1], "w"))' "$SECRETS_FILE"
+          pnpm exec wrangler secret bulk "$SECRETS_FILE" --env "$ENVIRONMENT"
