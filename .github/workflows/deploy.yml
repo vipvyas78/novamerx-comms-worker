@@ -87,7 +87,8 @@ jobs:
           set -euo pipefail
           [ -n "$INBOUND_EMAIL_TOKEN" ] && [ -n "$INBOUND_EMAIL_SIGNING_SECRET" ] \
             || { echo "::error::INBOUND_EMAIL_TOKEN and INBOUND_EMAIL_SIGNING_SECRET must both be set in '$ENVIRONMENT'"; exit 1; }
-          pnpm exec wrangler deploy --env "$ENVIRONMENT" --message "${GITHUB_SHA:0:7} by $GITHUB_ACTOR"
+          # No --message: wrangler 3 rejects it ("Unknown argument: message").
+          pnpm exec wrangler deploy --env "$ENVIRONMENT"
           # wrangler 3 has no --secrets-file; bulk from a private temp file instead, never argv.
           SECRETS_FILE="$RUNNER_TEMP/worker-secrets.json"
           trap 'rm -f "$SECRETS_FILE"' EXIT
