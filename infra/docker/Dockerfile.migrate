@@ -7,7 +7,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json tsconfig.migrate.json ./
 COPY src/migrate ./src/migrate
-RUN pnpm exec tsc -p tsconfig.migrate.json --noEmit false --outDir dist
+RUN pnpm exec tsc -p tsconfig.migrate.json --noEmit false --rootDir src --outDir dist
 
 FROM node:24-alpine
 WORKDIR /app
