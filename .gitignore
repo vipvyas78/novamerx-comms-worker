@@ -5,3 +5,7 @@ dist/
 .env
 *.tsbuildinfo
 test-results/
+
+# Rendered per deploy by scripts/render-wrangler.mjs
+wrangler.deploy.jsonc
+wrangler.dry.jsonc

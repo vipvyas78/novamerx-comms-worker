@@ -1,6 +1,7 @@
 import PostalMime from 'postal-mime';
 import { buildPayload, idempotencyKeyFor } from './buildPayload.js';
 import { deliver } from './deliver.js';
+import { inboundSecrets } from './secrets.js';
 import type { Env } from './env.d.ts';
 import {
   FAILED_PREFIX, MAX_REPLAY_ATTEMPTS, PENDING_PREFIX, readEntry, spool, type SpoolEntry
@@ -38,8 +39,7 @@ export default {
 
     const outcome = await deliver({
       url: env.TPS_INBOUND_URL,
-      token: env.INBOUND_EMAIL_TOKEN,
-      secret: env.INBOUND_EMAIL_SIGNING_SECRET,
+      ...(await inboundSecrets(env)),
       payload,
       idempotencyKey
     });
@@ -84,6 +84,7 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
     if (!env.SPOOL) return;
     const listing = await env.SPOOL.list({ prefix: PENDING_PREFIX, limit: 100 });
+    const secrets = await inboundSecrets(env);
 
     for (const object of listing.objects) {
       const entry = await readEntry(env.SPOOL, object.key);
@@ -95,8 +96,7 @@ export default {
 
       const outcome = await deliver({
         url: env.TPS_INBOUND_URL,
-        token: env.INBOUND_EMAIL_TOKEN,
-        secret: env.INBOUND_EMAIL_SIGNING_SECRET,
+        ...secrets,
         payload: entry.payload,
         idempotencyKey: entry.idempotencyKey,
         // One attempt per pass: the cron IS the retry loop, and holding the isolate open
