@@ -1,5 +1,9 @@
 # Deploy the comms Worker to a cloud environment (nrm-seed-generator#145).
 #
+# RETIRED (nrm-seed-generator#188): the inbound-email secrets are Cloudflare Secrets Store
+# bindings now, which no workflow can read back. Deploy with vipvyas78/novamerx-deploy
+# (`./deploy <env> comms`).
+#
 #   dev         manual, any branch (or nrm-seed-generator's "Deploy all to dev")
 #   staging     on push to main (deploy-staging.yml), once STAGING_ENABLED is on
 #   production  manual, from a tag, behind the environment's required reviewer

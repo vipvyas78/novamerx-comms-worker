@@ -17,9 +17,11 @@
     "TPS_INBOUND_URL": "https://example.invalid/tps-api/internal/email/inbound"
   },
 
-  // Secrets, NOT vars: `wrangler secret put INBOUND_EMAIL_TOKEN` and
-  // `wrangler secret put INBOUND_EMAIL_SIGNING_SECRET`. Both must match the TPS deployment
-  // exactly or every message 401s. See README "Rotating the secrets".
+  // Secrets, NOT vars. In the cloud INBOUND_EMAIL_TOKEN and INBOUND_EMAIL_SIGNING_SECRET are
+  // Cloudflare Secrets Store bindings, one pair per environment below (nrm-seed-generator#188);
+  // "SECRETS_STORE_ID" is filled in at deploy by scripts/render-wrangler.mjs. Locally they are
+  // strings in .dev.vars. Both must match TPS's exactly or every message 401s. See README
+  // "Rotating the secrets".
 
   // The dead-letter spool. Optional at runtime - without it a message TPS cannot accept
   // after three attempts is logged and lost, and the README says so - but configured here
@@ -51,17 +53,29 @@
     "dev": {
       "name": "novamerx-comms-worker-dev",
       "vars": { "TPS_INBOUND_URL": "https://dev.novamerx.ai/tps-api/internal/email/inbound" },
-      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool-dev", "jurisdiction": "eu" }]
+      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool-dev", "jurisdiction": "eu" }],
+      "secrets_store_secrets": [
+        { "binding": "INBOUND_EMAIL_TOKEN", "store_id": "SECRETS_STORE_ID", "secret_name": "dev__INBOUND_EMAIL_TOKEN" },
+        { "binding": "INBOUND_EMAIL_SIGNING_SECRET", "store_id": "SECRETS_STORE_ID", "secret_name": "dev__INBOUND_EMAIL_SIGNING_SECRET" }
+      ]
     },
     "staging": {
       "name": "novamerx-comms-worker-staging",
       "vars": { "TPS_INBOUND_URL": "https://staging.novamerx.ai/tps-api/internal/email/inbound" },
-      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool-staging", "jurisdiction": "eu" }]
+      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool-staging", "jurisdiction": "eu" }],
+      "secrets_store_secrets": [
+        { "binding": "INBOUND_EMAIL_TOKEN", "store_id": "SECRETS_STORE_ID", "secret_name": "staging__INBOUND_EMAIL_TOKEN" },
+        { "binding": "INBOUND_EMAIL_SIGNING_SECRET", "store_id": "SECRETS_STORE_ID", "secret_name": "staging__INBOUND_EMAIL_SIGNING_SECRET" }
+      ]
     },
     "production": {
       "name": "novamerx-comms-worker",
       "vars": { "TPS_INBOUND_URL": "https://app.novamerx.ai/tps-api/internal/email/inbound" },
-      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool", "jurisdiction": "eu" }]
+      "r2_buckets": [{ "binding": "SPOOL", "bucket_name": "novamerx-comms-spool", "jurisdiction": "eu" }],
+      "secrets_store_secrets": [
+        { "binding": "INBOUND_EMAIL_TOKEN", "store_id": "SECRETS_STORE_ID", "secret_name": "production__INBOUND_EMAIL_TOKEN" },
+        { "binding": "INBOUND_EMAIL_SIGNING_SECRET", "store_id": "SECRETS_STORE_ID", "secret_name": "production__INBOUND_EMAIL_SIGNING_SECRET" }
+      ]
     }
   }
 }

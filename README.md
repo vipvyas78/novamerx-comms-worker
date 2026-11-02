@@ -162,14 +162,16 @@ Since nrm-seed-generator#145 this repository deploys itself, one script per envi
 
 | environment | script | how |
 |---|---|---|
-| dev | `novamerx-comms-worker-dev` | **Deploy** workflow, any branch (or the parent's "Deploy all to dev") |
-| staging | `novamerx-comms-worker-staging` | every merge to `main`, **off until `STAGING_ENABLED=true`** |
-| production | `novamerx-comms-worker` (unchanged) | **Deploy** workflow from a tag, behind a reviewer |
+| dev | `novamerx-comms-worker-dev` | `./deploy dev comms` from [novamerx-deploy](https://github.com/vipvyas78/novamerx-deploy), any branch |
+| staging | `novamerx-comms-worker-staging` | `./deploy staging comms`, commits on `main` |
+| production | `novamerx-comms-worker` (unchanged) | `./deploy production comms`, a tag |
 
-The workflow migrates the `comms` schema, deploys, then sets the two inbound-email secrets
-from the GitHub Environment. [novamerx-infra](https://github.com/vipvyas78/novamerx-infra)'s
-`scripts/sync-env-secrets.sh` writes the same values to TPS, so the pair always matches. The
-spool buckets come from novamerx-infra's Terraform. What is still manual, per environment:
+A deploy migrates the `comms` schema, then deploys the Worker with its two inbound-email
+secrets as **Cloudflare Secrets Store** bindings (`<env>__INBOUND_EMAIL_TOKEN`, …;
+nrm-seed-generator#188). `scripts/render-wrangler.mjs` fills in the account's store id. TPS
+binds the very same two secrets, so the pair cannot drift. The GitHub **Deploy** workflows are
+retired: nothing can read a value back out of the store. The spool buckets come from
+novamerx-infra's Terraform. What is still manual, per environment:
 
 1. **Email Routing rules**, one per `<org>-ittcomms@novamerx.ai` address plus one for
    `itt-reply@novamerx.co.uk`, each targeting this Worker. Nothing in this repository
@@ -181,10 +183,11 @@ consumes `novamerx.ai`'s Email Routing and Sending domain allowance.
 
 ### Rotating the secrets
 
-TPS accepts exactly one signing secret, so rotation is not atomic: there is a window where
-in-flight messages 401. The R2 spool means that window **self-heals** — the messages land
-in `pending/` and the cron replays them once both sides agree. Rotate TPS first, then the
-Worker, and expect one replay cycle.
+Both sides read one Secrets Store secret, so `./secrets <env> rotate INBOUND_EMAIL_TOKEN`
+(novamerx-deploy) changes them together. This Worker reads the new value on its next message;
+TPS's container only reads it when it restarts, which the rotate's redeploy of TPS does. In
+between, messages 401. The R2 spool means that window **self-heals**: the messages land in
+`pending/` and the cron replays them once both sides agree. Expect one replay cycle.
 
 ## Known and unverified
 
@@ -199,7 +202,6 @@ Worker, and expect one replay cycle.
   attribution routes on the TPS side, but worth confirming on the first real Client reply.
 - Migration `022` is retired in TPS and its ledger row there is left in place: it is a true
   record that the migration was once applied to that database. TPS's next migration is `023`.
-- Wrangler is pinned at v3; v4 is available. Upgrade deliberately, with a `deploy:dry` check.
 
 ## Why this is one flat package and not a pnpm workspace
 
